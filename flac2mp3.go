@@ -61,11 +61,17 @@ func main() {
 
 	ch := make(chan struct{}, *concurrency)
 	err := filepath.Walk(*flacDir, func(path string, info os.FileInfo, err error) error {
-		if info.IsDir() {
+		if info.IsDir() || err != nil {
+			return err
+		}
+
+		outputPath := filepath.Join(*mp3Dir, strings.Replace(filepath.Base(path), ".flac", ".mp3", -1))
+		if tmpInfo, tmpErr := os.Stat(outputPath); tmpErr == nil && tmpInfo.Size() > 0 {
+			log.Printf("skip already exists file: %s\n", path)
 			return nil
 		}
+
 		if filepath.Ext(path) == ".mp3" {
-			outputPath := filepath.Join(*mp3Dir, filepath.Base(path))
 			if err = copyFile(path, outputPath); err != nil {
 				return err
 			}
@@ -77,7 +83,6 @@ func main() {
 		ch <- struct{}{}
 		go func() {
 			defer func() { <-ch }()
-			outputPath := filepath.Join(*mp3Dir, strings.Replace(filepath.Base(path), ".flac", ".mp3", -1))
 			if err = flacToMp3ViaFFmpeg(path, outputPath); err != nil {
 				log.Printf("trans %s failed：%s\n", path, err)
 			}
